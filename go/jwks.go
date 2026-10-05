@@ -222,7 +222,7 @@ func (c *keyCache) discover(ctx context.Context) (string, error) {
 	// a document served from the right place but describing another issuer
 	// could point us at that issuer's keys.
 	if iss, _ := doc["issuer"].(string); iss != c.issuer {
-		return "", fmt.Errorf("document is for issuer %q, not %q", doc["issuer"], c.issuer)
+		return "", fmt.Errorf("document is for issuer %q, not %q", iss, c.issuer)
 	}
 	jwksURI, _ := doc["jwks_uri"].(string)
 	if jwksURI == "" {
