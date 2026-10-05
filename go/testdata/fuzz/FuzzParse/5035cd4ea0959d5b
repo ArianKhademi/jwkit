@@ -1,0 +1,2 @@
+go test fuzz v1
+string("eyJ0YCI6Ik10YCJ9.eyIiOiJ0XyJ9.0000")
