@@ -390,8 +390,9 @@ disagreement.
 | TypeScript package `ts/src` | **100%** | lines (v8) | fails below 90% on lines, statements, branches or functions |
 
 Measured by [CI run 4](https://github.com/ArianKhademi/jwkit/actions/runs/37279460195)
-on commit `b50afb0`, with Go 1.26 and Node 22. Commits after it changed
-documentation only. On every run on `main` the same job writes the numbers it
+on commit `b50afb0`, with Go 1.26 and Node 22. Later commits changed only
+documentation and the conformance report tool, neither of which is part of
+the measured code. On every run on `main` the same job writes the numbers it
 measured to the `badges` branch, which is where the two badges at the top of
 this page read them from.
 
