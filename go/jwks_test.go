@@ -514,13 +514,13 @@ func TestParseJWKS(t *testing.T) {
 		rsaKey1.jwk(),
 		ecKey1.jwk(),
 		privateRSA,
-		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "rsa-1" }),                     // duplicate kid: ignored
-		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "enc"; j["use"] = "enc" }),     // encryption key
-		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "ps256"; j["alg"] = "PS256" }), // other algorithm
-		jwkWith(rsaKey3, func(j map[string]any) { delete(j, "kid") }),                       // no kid
-		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = 7 }),                           // kid not a string
-		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "no-n"; delete(j, "n") }),      // incomplete
-		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "bad-n"; j["n"] = "!!!" }),     // not base64url
+		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "rsa-1" }),                                   // duplicate kid: ignored
+		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "enc"; j["use"] = "enc" }),                   // encryption key
+		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "ps256"; j["alg"] = "PS256" }),               // other algorithm
+		jwkWith(rsaKey3, func(j map[string]any) { delete(j, "kid") }),                                     // no kid
+		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = 7 }),                                         // kid not a string
+		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "no-n"; delete(j, "n") }),                    // incomplete
+		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "bad-n"; j["n"] = "!!!" }),                   // not base64url
 		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "zero-n"; j["n"] = b64(make([]byte, 256)) }), // all-zero modulus
 		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "no-alg-use"; delete(j, "alg"); delete(j, "use") }),
 		rsaSmall.jwk(), // 1024-bit modulus
