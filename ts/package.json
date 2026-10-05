@@ -1,0 +1,69 @@
+{
+  "name": "@ariankhademi/jwkit",
+  "version": "0.1.0",
+  "description": "JWT / JWKS verification with key-rotation-aware caching and drop-in Express middleware. The TypeScript twin of the jwkit Go module: same checks, same typed errors.",
+  "keywords": [
+    "jwt",
+    "jwks",
+    "jose",
+    "express",
+    "middleware",
+    "authentication",
+    "oidc"
+  ],
+  "license": "MIT",
+  "author": "Arian Khademi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArianKhademi/jwkit.git",
+    "directory": "ts"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "cover": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "jose": "^6.2.12"
+  },
+  "peerDependencies": {
+    "express": "^4.17.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.19.43",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^10.12.0",
+    "express": "^5.2.1",
+    "fast-check": "^4.10.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^4.1.11"
+  }
+}
