@@ -61,7 +61,9 @@ for (const c of fx.cases) {
     got = err instanceof JwkitError ? err.code : `untyped error: ${String(err)}`
   }
   results.push({ name: c.name, result: got })
-  if (got !== c.expect) {
+  // Differential-test input carries no expectation: the result is only
+  // recorded, to be compared with the other implementation's.
+  if (c.expect !== '' && got !== c.expect) {
     mismatches++
     console.error(`MISMATCH ${c.name}: expected ${c.expect}, got ${got}`)
   }

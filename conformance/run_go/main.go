@@ -101,7 +101,9 @@ func run(fixturesPath, outPath string) (mismatches int, err error) {
 			}
 		}
 		results = append(results, result{Name: c.Name, Result: got})
-		if got != c.Expect {
+		// Differential-test input carries no expectation: the result is
+		// only recorded, to be compared with the other implementation's.
+		if c.Expect != "" && got != c.Expect {
 			mismatches++
 			fmt.Fprintf(os.Stderr, "MISMATCH %s: expected %s, got %s\n", c.Name, c.Expect, got)
 		}

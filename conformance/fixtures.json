@@ -368,7 +368,7 @@
     },
     {
       "name": "claims-inside-proto-member",
-      "about": "The real claims are nested under __proto__; an implementation that reads through the prototype chain would accept this.",
+      "about": "The real claims sit under a member named __proto__. JavaScript code that copies the payload with assignment semantics (Object.assign) would turn that member into the object's prototype and then find the claims on it.",
       "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6InJzYS1jdXJyZW50In0.eyJfX3Byb3RvX18iOnsiaXNzIjoiaHR0cHM6Ly9pc3N1ZXIuandraXQuZXhhbXBsZSIsImF1ZCI6Imh0dHBzOi8vYXBpLmp3a2l0LmV4YW1wbGUiLCJleHAiOjE3NTAwMDM2MDB9fQ.MbuZKtYSBVWHs33uSr68DmwS6f7Z62iaZecrEiP9Kz2MPuUTsAwUn4hZFAGh_K8_6CLO1MBq9cE_j-NO7z5I3nHtfFY6y_ahbVqfN25FiGIT9FWNPXW0FMM2XfZAJtflJgfftH4Cy01BG53PVFMG_y_-M1roamAFENeWqPZE8AfV8xgJ-Gty50qY185MD4okME00_tDFjLXjiyg_WMcs1XxeF-2l1tvXk1uk9O0AC_vBIouXh2bnuYNUVCaLGAfraYqqtZWGvvcF6U3AoRGgmobkOK0nqPY4roykQql7Vgdw_FKk5PzfjToNpOL999k_WLyQHiCJLdUI3-JZA2rJNg",
       "expect": "ErrBadIssuer"
     },
@@ -596,7 +596,7 @@
     },
     {
       "name": "alg-inside-proto-member",
-      "about": "alg and kid nested under __proto__; an implementation that reads through the prototype chain would see them.",
+      "about": "alg and kid sit under a member named __proto__, where only code that lets it become the object's prototype would find them.",
       "token": "eyJfX3Byb3RvX18iOnsiYWxnIjoiUlMyNTYiLCJraWQiOiJyc2EtY3VycmVudCJ9fQ.eyJhdWQiOiJodHRwczovL2FwaS5qd2tpdC5leGFtcGxlIiwiZXhwIjoxNzUwMDAzNjAwLCJpYXQiOjE3NDk5OTk5OTAsImlzcyI6Imh0dHBzOi8vaXNzdWVyLmp3a2l0LmV4YW1wbGUiLCJzdWIiOiJ1c2VyLTEyMyJ9.BOLpadZlXnJnHlOewl02zgcPcmHgASu33xLgzw-uHM2fdvVGORX8CZQUa0sVauxx9WjfH04xp6tV70qkSoh2koeg_jZihxY9FmIK78g3jO70XODIhjW_09OyfQ0gPz_565L3vh7W9F8smOJ2xky0a8ik2s-6ID9eKnA7mqs8h7PdRsqOWM32p6TbL3UJzGJBGMEwz12fWoaiXWHDCUjbh8VcRoNLJnDH6hivU-DcQoHi2i0wDqgqeq1qZvnXNamS5JrYj73frHolvqynrEWoRsthWMx1HY6_KDgcKG1h39lggyGi1UCimiB4J_VXj1mmvVagAtJeGvTGZgbkoL5T9Q",
       "expect": "ErrMalformed"
     },

@@ -6,6 +6,7 @@
 //	go run . -check     fail if fixtures.json is not what the generator produces
 //	go run . -new-keys  regenerate with fresh key pairs
 //	go run . -serve :8089   serve the fixture JWKS and mint tokens
+//	go run . -mutations 5000 -seed 1   write random mutations (see mutate.go)
 //
 // It uses only the Go standard library: tokens are built by hand and signed
 // with crypto/rsa and crypto/ecdsa, so neither JOSE library under test had a
@@ -85,20 +86,23 @@ func main() {
 	check := flag.Bool("check", false, "verify the fixtures file is up to date instead of writing it")
 	newKeys := flag.Bool("new-keys", false, "generate fresh key pairs instead of reusing the ones in the fixtures file")
 	serveAddr := flag.String("serve", "", "serve the fixture JWKS and mint tokens on this address instead of generating")
+	mutations := flag.Int("mutations", 0, "write this many random mutations for differential testing instead of generating (see mutate.go)")
+	seed := flag.Uint64("seed", 1, "with -mutations: the random seed")
+	out := flag.String("out", "results/mutations.json", "with -mutations: where to write them")
 	flag.Parse()
 
-	if err := run(*path, *check, *newKeys, *serveAddr); err != nil {
+	if err := run(*path, *check, *newKeys, *serveAddr, *mutations, *seed, *out); err != nil {
 		fmt.Fprintln(os.Stderr, "conformance:", err)
 		os.Exit(1)
 	}
 }
 
-func run(path string, check, newKeys bool, serveAddr string) error {
+func run(path string, check, newKeys bool, serveAddr string, mutations int, seed uint64, mutationsPath string) error {
 	existing, readErr := os.ReadFile(path)
 
 	var keys *keyring
 	if newKeys || readErr != nil {
-		if check || serveAddr != "" {
+		if check || serveAddr != "" || mutations > 0 {
 			return fmt.Errorf("%s is needed for this mode: %v", path, readErr)
 		}
 		keys = generateKeys()
@@ -111,6 +115,9 @@ func run(path string, check, newKeys bool, serveAddr string) error {
 
 	if serveAddr != "" {
 		return serve(serveAddr, keys)
+	}
+	if mutations > 0 {
+		return writeMutations(mutationsPath, keys, mutations, seed)
 	}
 
 	out, err := render(keys)
@@ -587,7 +594,7 @@ func buildCases(keys *keyring) []Case {
 		bad("audience-is-a-number", "ErrBadAudience", "aud must be a string or an array.", rs.token(obj{"aud": 42})),
 		bad("wrong-issuer-and-expired", "ErrBadIssuer", "Two faults: the issuer check comes first.", rs.token(obj{"iss": "https://evil.example", "exp": now - 3600})),
 		bad("wrong-audience-and-expired", "ErrBadAudience", "Two faults: the audience check comes before expiry.", rs.token(obj{"aud": "https://other.example", "exp": now - 3600})),
-		bad("claims-inside-proto-member", "ErrBadIssuer", "The real claims are nested under __proto__; an implementation that reads through the prototype chain would accept this.",
+		bad("claims-inside-proto-member", "ErrBadIssuer", "The real claims sit under a member named __proto__. JavaScript code that copies the payload with assignment semantics (Object.assign) would turn that member into the object's prototype and then find the claims on it.",
 			rs.signed(rsHeader, fmt.Sprintf(`{"__proto__":{"iss":%q,"aud":%q,"exp":%d}}`, issuer, audience, now+3600))),
 
 		// ----- Signature ----------------------------------------------------
@@ -643,7 +650,7 @@ func buildCases(keys *keyring) []Case {
 		bad("alg-is-a-number", "ErrMalformed", "alg must be a string.", rs.tokenWithHeader(obj{"alg": 256})),
 		bad("alg-member-upper-case", "ErrMalformed", `The member is spelled "ALG". Member names are case-sensitive, so there is no alg.`,
 			rs.signed(`{"ALG":"RS256","kid":"`+rs.kid+`"}`, claimsJSON)),
-		bad("alg-inside-proto-member", "ErrMalformed", "alg and kid nested under __proto__; an implementation that reads through the prototype chain would see them.",
+		bad("alg-inside-proto-member", "ErrMalformed", "alg and kid sit under a member named __proto__, where only code that lets it become the object's prototype would find them.",
 			rs.signed(`{"__proto__":{"alg":"RS256","kid":"`+rs.kid+`"}}`, claimsJSON)),
 
 		// ----- Header policy ------------------------------------------------
