@@ -37,7 +37,10 @@ jobs:
             conformance/go.sum
             examples/gin-server/go.sum
 
+      # staticcheck needs the newest Go release, so static checks run once,
+      # on the primary version; the tests below run on every version.
       - name: gofmt, go vet, staticcheck
+        if: matrix.go == env.GO_PRIMARY
         run: make lint-go
 
       - name: Unit tests (race detector)
