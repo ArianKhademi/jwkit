@@ -1,0 +1,19 @@
+{
+  "name": "jwkit-express-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ariankhademi/jwkit": "file:../../ts",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^20",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}
