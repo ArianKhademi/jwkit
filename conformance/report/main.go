@@ -106,24 +106,35 @@ func readJSON(path string, v any) error {
 	return nil
 }
 
-// render is only reached when every result is identical, so the Go and
-// TypeScript columns are printed from their own data but are known to match.
+// render is only reached when every result is identical. Every figure it
+// prints is nevertheless counted from the result files, not assumed.
 func render(cases []fixtureCase, goResults, tsResults []result) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%d cases, %d identical results across the fixture expectation, Go and TypeScript.\n\n", len(cases), len(cases))
-
 	// Summary by expected result, in order of first appearance.
 	var order []string
-	count := map[string]int{}
-	for _, c := range cases {
+	count, goAgrees, tsAgrees := map[string]int{}, map[string]int{}, map[string]int{}
+	identical := 0
+	for i, c := range cases {
 		if count[c.Expect] == 0 {
 			order = append(order, c.Expect)
 		}
 		count[c.Expect]++
+		g, t := goResults[i].Result == c.Expect, tsResults[i].Result == c.Expect
+		if g {
+			goAgrees[c.Expect]++
+		}
+		if t {
+			tsAgrees[c.Expect]++
+		}
+		if g && t {
+			identical++
+		}
 	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d cases, %d identical results across the fixture expectation, Go and TypeScript.\n\n", len(cases), identical)
 	b.WriteString("| Expected result | Cases | Go agrees | TypeScript agrees |\n|---|---:|---:|---:|\n")
 	for _, expect := range order {
-		fmt.Fprintf(&b, "| `%s` | %d | %d | %d |\n", expect, count[expect], count[expect], count[expect])
+		fmt.Fprintf(&b, "| `%s` | %d | %d | %d |\n", expect, count[expect], goAgrees[expect], tsAgrees[expect])
 	}
 
 	fmt.Fprintf(&b, "\n<details>\n<summary>All %d cases</summary>\n\n", len(cases))
