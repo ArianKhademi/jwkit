@@ -272,7 +272,7 @@ describe('a failed refresh keeps the last good keys', () => {
     // set and the hook hears about it.
     await mustVerify(verifier, longLived())
     expect(warnings).toHaveLength(1)
-    expect(warnings[0]!.message).toContain(`JWKS refresh from ${url} failed`)
+    expect(warnings[0]!.message).toContain(`JWKS refresh failed: JWKS at ${url}`)
 
     // No retry storm: nothing is fetched again until refetchIntervalSec has passed.
     for (let i = 0; i < 20; i++) {

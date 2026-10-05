@@ -33,7 +33,12 @@ export interface VerificationKey {
 }
 
 export interface KeyCacheOptions {
-  jwksUrl: string
+  /** The configured issuer; a discovery document must name exactly this. */
+  issuer: string
+  /** The configured JWKS location. Absent when it is to be discovered. */
+  jwksUrl?: string | undefined
+  /** The issuer's OpenID Connect discovery document. Absent when jwksUrl was configured directly. */
+  discoveryUrl?: string | undefined
   ttlSec: number
   refetchIntervalSec: number
   /** Milliseconds since the epoch, like Date.now. */
@@ -51,6 +56,10 @@ export interface KeyCacheOptions {
  */
 export class KeyCache {
   private readonly opts: KeyCacheOptions
+  /** The configured JWKS location, or the one found through discovery. */
+  private jwksUrl: string | undefined
+  /** The discovery document's URL; "" when the JWKS URL was configured directly. */
+  private readonly discoveryUrl: string
   /** null until the first successful fetch. */
   private keys: Map<string, VerificationKey> | null = null
   /** When `keys` must be refreshed, in ms. */
@@ -65,6 +74,8 @@ export class KeyCache {
 
   constructor(opts: KeyCacheOptions) {
     this.opts = opts
+    this.jwksUrl = opts.jwksUrl
+    this.discoveryUrl = opts.discoveryUrl ?? ''
   }
 
   /**
@@ -123,7 +134,7 @@ export class KeyCache {
         return null
       },
       (reason: unknown) => {
-        const err = reason instanceof Error ? reason : new Error(String(reason))
+        const err = toError(reason)
         // Keep serving the last good key set, and do not retry before
         // refetchIntervalSec so an outage is not answered with a fetch on
         // every request.
@@ -132,7 +143,7 @@ export class KeyCache {
           this.expiresAt = retryAt
         }
         this.inflight = null
-        this.warn(new Error(`jwkit: JWKS refresh from ${this.opts.jwksUrl} failed: ${err.message}`, { cause: err }))
+        this.warn(new Error(`jwkit: JWKS refresh failed: ${err.message}`, { cause: err }))
         return err
       },
     )
@@ -151,25 +162,95 @@ export class KeyCache {
 
   /** Downloads and parses the JWKS; returns the keys and how long to cache them. */
   private async fetchKeys(): Promise<{ keys: Map<string, VerificationKey>; ttlSec: number }> {
-    const res = await this.opts.fetch(this.opts.jwksUrl, {
-      headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    })
+    const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS)
+
+    if (this.jwksUrl === undefined) {
+      try {
+        this.jwksUrl = await this.discover(signal)
+      } catch (err) {
+        throw new Error(`OpenID discovery at ${this.discoveryUrl}: ${toError(err).message}`, { cause: err })
+      }
+    }
+
+    const url = this.jwksUrl
+    try {
+      const { body, headers } = await this.httpGet(url, signal)
+      const keys = await parseJwks(body)
+
+      let ttlSec = this.opts.ttlSec
+      const maxAge = cacheControlMaxAge(headers.get('cache-control') ?? '')
+      if (maxAge !== undefined) {
+        // The issuer knows its own rotation schedule better than a default
+        // does, within limits: never poll faster than refetchIntervalSec and
+        // never trust a key set for more than MAX_CACHE_TTL_SEC.
+        ttlSec = Math.min(Math.max(maxAge, this.opts.refetchIntervalSec), MAX_CACHE_TTL_SEC)
+      }
+      return { keys, ttlSec }
+    } catch (err) {
+      if (this.discoveryUrl !== '') {
+        // Forget a discovered location that did not work, so the next
+        // attempt asks the issuer again in case the JWKS has moved.
+        this.jwksUrl = undefined
+      }
+      throw new Error(`JWKS at ${url}: ${toError(err).message}`, { cause: err })
+    }
+  }
+
+  /** Resolves the JWKS URL from the issuer's OpenID Connect discovery document. */
+  private async discover(signal: AbortSignal): Promise<string> {
+    const { body } = await this.httpGet(this.discoveryUrl, signal)
+    let doc: unknown
+    try {
+      doc = JSON.parse(body)
+    } catch {
+      throw new Error('document is not a JSON object')
+    }
+    if (!isObject(doc)) {
+      throw new Error('document is not a JSON object')
+    }
+    // OpenID Connect Discovery 1.0, section 4.3: the issuer in the document
+    // must be identical to the one it was requested for. Without this check
+    // a document served from the right place but describing another issuer
+    // could point us at that issuer's keys.
+    if (doc.issuer !== this.opts.issuer) {
+      throw new Error(`document is for issuer ${JSON.stringify(doc.issuer)}, not ${JSON.stringify(this.opts.issuer)}`)
+    }
+    const jwksUri = doc.jwks_uri
+    if (typeof jwksUri !== 'string' || jwksUri === '') {
+      throw new Error('document has no jwks_uri')
+    }
+    if (!isHttpUrl(jwksUri)) {
+      throw new Error(`jwks_uri: ${JSON.stringify(jwksUri)} is not an absolute http(s) URL`)
+    }
+    return jwksUri
+  }
+
+  /** Fetches a JSON document, insisting on a 200 and capping its size. */
+  private async httpGet(url: string, signal: AbortSignal): Promise<{ body: string; headers: Headers }> {
+    const res = await this.opts.fetch(url, { headers: { accept: 'application/json' }, signal })
     if (res.status !== 200) {
       await res.body?.cancel()
       throw new Error(`unexpected HTTP status ${res.status}`)
     }
-    const keys = await parseJwks(await readCapped(res, MAX_JWKS_BYTES))
+    return { body: await readCapped(res, MAX_JWKS_BYTES), headers: res.headers }
+  }
+}
 
-    let ttlSec = this.opts.ttlSec
-    const maxAge = cacheControlMaxAge(res.headers.get('cache-control') ?? '')
-    if (maxAge !== undefined) {
-      // The issuer knows its own rotation schedule better than a default
-      // does, within limits: never poll faster than refetchIntervalSec and
-      // never trust a key set for more than MAX_CACHE_TTL_SEC.
-      ttlSec = Math.min(Math.max(maxAge, this.opts.refetchIntervalSec), MAX_CACHE_TTL_SEC)
-    }
-    return { keys, ttlSec }
+/** A rejection can carry any value; everything downstream wants an Error. */
+function toError(reason: unknown): Error {
+  return reason instanceof Error ? reason : new Error(String(reason))
+}
+
+/** Reports whether raw is an absolute http: or https: URL. */
+export function isHttpUrl(raw: unknown): raw is string {
+  if (typeof raw !== 'string') {
+    return false
+  }
+  try {
+    const { protocol } = new URL(raw)
+    return protocol === 'https:' || protocol === 'http:'
+  } catch {
+    return false
   }
 }
 

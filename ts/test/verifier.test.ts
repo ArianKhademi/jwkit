@@ -302,7 +302,8 @@ describe('Verifier config', () => {
   test.each<[string, Partial<Record<keyof VerifierConfig, unknown>>]>([
     ['missing issuer', { issuer: '' }],
     ['missing audience', { audience: '' }],
-    ['missing JWKS URL', { jwksUrl: '' }],
+    ['no JWKS URL and an issuer that is not a URL', { jwksUrl: undefined, issuer: 'my-issuer' }],
+    ['empty JWKS URL and an issuer that is not a URL', { jwksUrl: '', issuer: 'my-issuer' }],
     ['relative JWKS URL', { jwksUrl: '/jwks.json' }],
     ['non-HTTP JWKS URL', { jwksUrl: 'file:///etc/jwks.json' }],
     ['JWKS URL of the wrong type', { jwksUrl: 42 }],

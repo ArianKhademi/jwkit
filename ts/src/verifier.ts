@@ -9,7 +9,7 @@ import {
   ErrNotYetValid,
   ErrUnsupportedAlg,
 } from './errors.js'
-import { KeyCache, type Alg, type VerificationKey } from './jwks.js'
+import { isHttpUrl, KeyCache, type Alg, type VerificationKey } from './jwks.js'
 
 export const DEFAULT_CLOCK_SKEW_SEC = 60
 export const DEFAULT_CACHE_TTL_SEC = 600
@@ -23,14 +23,18 @@ export const DEFAULT_MAX_TOKEN_BYTES = 8192
 /** The size of an ES256 signature: r and s, 32 bytes each. */
 const ES256_SIGNATURE_LEN = 64
 
-/** Configures a Verifier. issuer, audience and jwksUrl are required. */
+/** Configures a Verifier. issuer and audience are required. */
 export interface VerifierConfig {
   /** The exact value the token's iss claim must have. */
   issuer: string
   /** Must appear in the token's aud claim. */
   audience: string
-  /** Where the issuer publishes its public keys. */
-  jwksUrl: string
+  /**
+   * Where the issuer publishes its public keys. If it is omitted, issuer must
+   * be a URL and the JWKS location is resolved through OpenID Connect
+   * discovery: jwks_uri from <issuer>/.well-known/openid-configuration.
+   */
+  jwksUrl?: string
   /** Tolerance applied to exp, nbf and iat, in seconds. Default 60; 0 means none. */
   clockSkewSec?: number
   /**
@@ -121,7 +125,18 @@ export class Verifier {
     if (typeof config.audience !== 'string' || config.audience === '') {
       throw new TypeError('jwkit: config.audience is required')
     }
-    checkHttpUrl(config.jwksUrl)
+    let discoveryUrl: string | undefined
+    if (config.jwksUrl !== undefined && config.jwksUrl !== '') {
+      if (!isHttpUrl(config.jwksUrl)) {
+        throw new TypeError(`jwkit: config.jwksUrl: ${JSON.stringify(config.jwksUrl)} is not an absolute http(s) URL`)
+      }
+    } else {
+      if (!isHttpUrl(config.issuer)) {
+        throw new TypeError('jwkit: config.jwksUrl is missing and config.issuer is not a URL to discover it from')
+      }
+      const base = config.issuer.endsWith('/') ? config.issuer.slice(0, -1) : config.issuer
+      discoveryUrl = `${base}/.well-known/openid-configuration`
+    }
 
     this.issuer = config.issuer
     this.audience = config.audience
@@ -129,7 +144,9 @@ export class Verifier {
     this.maxTokenBytes = positiveOr(config.maxTokenBytes, DEFAULT_MAX_TOKEN_BYTES)
     this.now = config.now ?? Date.now
     this.keys = new KeyCache({
-      jwksUrl: config.jwksUrl,
+      issuer: config.issuer,
+      jwksUrl: discoveryUrl === undefined ? config.jwksUrl : undefined,
+      discoveryUrl,
       ttlSec: positiveOr(config.cacheTtlSec, DEFAULT_CACHE_TTL_SEC),
       refetchIntervalSec: positiveOr(config.refetchIntervalSec, DEFAULT_REFETCH_INTERVAL_SEC),
       now: this.now,
@@ -202,21 +219,6 @@ export class Verifier {
 /** A missing, zero or negative setting means "use the default", as in the Go Config. */
 function positiveOr(value: number | undefined, fallback: number): number {
   return value !== undefined && value > 0 ? value : fallback
-}
-
-function checkHttpUrl(raw: unknown): void {
-  if (typeof raw !== 'string' || raw === '') {
-    throw new TypeError('jwkit: config.jwksUrl is required')
-  }
-  let url: URL
-  try {
-    url = new URL(raw)
-  } catch {
-    throw new TypeError(`jwkit: config.jwksUrl: ${JSON.stringify(raw)} is not an absolute http(s) URL`)
-  }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new TypeError(`jwkit: config.jwksUrl: ${JSON.stringify(raw)} is not an absolute http(s) URL`)
-  }
 }
 
 /**
