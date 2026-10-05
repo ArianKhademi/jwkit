@@ -480,6 +480,11 @@ func (k *key) paddedTo(n int) string {
 	panic(fmt.Sprintf("cannot build a token of exactly %d bytes", n))
 }
 
+// nested returns the JSON object text with one more member: n nested arrays.
+func nested(object string, n int) string {
+	return object[:len(object)-1] + `,"deep":` + strings.Repeat("[", n) + strings.Repeat("]", n) + "}"
+}
+
 func must(err error) {
 	if err != nil {
 		panic(err)
@@ -690,6 +695,16 @@ func buildCases(keys *keyring) []Case {
 		bad("payload-stray-brace", "ErrMalformed", "An extra closing brace after the claims object.", rs.signed(rsHeader, claimsJSON+"}")),
 		bad("payload-invalid-utf8", "ErrMalformed", "The payload contains the byte 0xFF, which is not valid UTF-8. Correctly signed.", rs.signed(rsHeader, "{\"iss\":\"\xff\"}")),
 		bad("payload-byte-order-mark", "ErrMalformed", "The payload starts with a UTF-8 byte order mark. Correctly signed. JavaScript's TextDecoder would strip it silently.", rs.signed(rsHeader, "\xef\xbb\xbf"+claimsJSON)),
+
+		// ----- Nesting depth -------------------------------------------------
+		ok("valid-nesting-at-depth-limit", "A claim holding 63 nested arrays: with the payload object itself, depth 64, the limit.",
+			rs.signed(rsHeader, nested(claimsJSON, 63))),
+		bad("nesting-over-depth-limit", "ErrMalformed", "One level deeper. JSON parsers disagree about how deep is too deep (Go stops at 10,000, V8 never does), so jwkit sets its own limit.",
+			rs.signed(rsHeader, nested(claimsJSON, 64))),
+		bad("header-nesting-over-depth-limit", "ErrMalformed", "The same limit applies to the header.",
+			rs.signed(nested(rsHeader, 64), claimsJSON)),
+		ok("valid-brackets-inside-strings", "Brackets and an escaped quote inside a string value are text, not nesting.",
+			rs.token(obj{"note": strings.Repeat("[{", 100) + `\"` + strings.Repeat("[", 100)})),
 
 		// ----- Size ---------------------------------------------------------
 		bad("one-byte-over-size-limit", "ErrMalformed", fmt.Sprintf("A correctly signed token of %d bytes, one over the limit.", maxTokenBytes+1), rs.paddedTo(maxTokenBytes+1)),

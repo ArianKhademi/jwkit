@@ -6,14 +6,14 @@ identity provider's JWKS endpoint. Work in progress; see the commit history.
 ## Conformance matrix
 
 <!-- conformance:start -->
-112 cases, 112 identical results across the fixture expectation, Go and TypeScript.
+116 cases, 116 identical results across the fixture expectation, Go and TypeScript.
 
 | Expected result | Cases | Go agrees | TypeScript agrees |
 |---|---:|---:|---:|
-| `ok` | 17 | 17 | 17 |
+| `ok` | 19 | 19 | 19 |
 | `ErrExpired` | 4 | 4 | 4 |
 | `ErrNotYetValid` | 2 | 2 | 2 |
-| `ErrMalformed` | 44 | 44 | 44 |
+| `ErrMalformed` | 46 | 46 | 46 |
 | `ErrBadIssuer` | 6 | 6 | 6 |
 | `ErrBadAudience` | 5 | 5 | 5 |
 | `ErrBadSignature` | 16 | 16 | 16 |
@@ -21,7 +21,7 @@ identity provider's JWKS endpoint. Work in progress; see the commit history.
 | `ErrUnsupportedAlg` | 12 | 12 | 12 |
 
 <details>
-<summary>All 112 cases</summary>
+<summary>All 116 cases</summary>
 
 | Case | What the token is | Go | TypeScript |
 |---|---|---|---|
@@ -135,6 +135,10 @@ identity provider's JWKS endpoint. Work in progress; see the commit history.
 | `payload-stray-brace` | An extra closing brace after the claims object. | `ErrMalformed` | `ErrMalformed` |
 | `payload-invalid-utf8` | The payload contains the byte 0xFF, which is not valid UTF-8. Correctly signed. | `ErrMalformed` | `ErrMalformed` |
 | `payload-byte-order-mark` | The payload starts with a UTF-8 byte order mark. Correctly signed. JavaScript's TextDecoder would strip it silently. | `ErrMalformed` | `ErrMalformed` |
+| `valid-nesting-at-depth-limit` | A claim holding 63 nested arrays: with the payload object itself, depth 64, the limit. | `ok` | `ok` |
+| `nesting-over-depth-limit` | One level deeper. JSON parsers disagree about how deep is too deep (Go stops at 10,000, V8 never does), so jwkit sets its own limit. | `ErrMalformed` | `ErrMalformed` |
+| `header-nesting-over-depth-limit` | The same limit applies to the header. | `ErrMalformed` | `ErrMalformed` |
+| `valid-brackets-inside-strings` | Brackets and an escaped quote inside a string value are text, not nesting. | `ok` | `ok` |
 | `one-byte-over-size-limit` | A correctly signed token of 8193 bytes, one over the limit. | `ErrMalformed` | `ErrMalformed` |
 | `extremely-long-token` | A correctly signed token of roughly 64 KiB. | `ErrMalformed` | `ErrMalformed` |
 

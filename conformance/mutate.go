@@ -212,6 +212,20 @@ func (m *mutator) str() string {
 }
 
 func (m *mutator) value(depth int) string {
+	if m.chance(2) {
+		// Nesting on either side of the depth limit of 64, sometimes behind
+		// a string of brackets that a naive bracket counter would miscount.
+		n := 60 + m.r.IntN(8)
+		deep := strings.Repeat("[", n) + strings.Repeat("]", n)
+		switch m.r.IntN(3) {
+		case 0:
+			return deep
+		case 1:
+			return `["[[[[\"[[[",` + deep + "]"
+		default:
+			return `["[[\\",` + deep + "]"
+		}
+	}
 	switch m.r.IntN(12) {
 	case 0:
 		return "null"
