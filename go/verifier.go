@@ -28,6 +28,13 @@ const (
 // es256SignatureLen is the size of an ES256 signature: r and s, 32 bytes each.
 const es256SignatureLen = 64
 
+// maxJSONDepth is how deeply a header or payload may nest arrays and objects.
+// Real claims nest a handful of levels. The limit exists because JSON parsers
+// disagree about depth: encoding/json gives up beyond 10,000 levels while V8
+// has no limit at all, so without a rule of our own a deeply nested token
+// would be malformed in one implementation and not in the other.
+const maxJSONDepth = 64
+
 // jwkit owns parsing and policy; the signature maths is delegated to jwx.
 var (
 	rs256Verifier = mustVerifier(jwa.RS256)
@@ -162,6 +169,9 @@ func decodeObject(segment string) (map[string]any, error) {
 	if !utf8.Valid(raw) {
 		return nil, errors.New("not valid UTF-8")
 	}
+	if nestsDeeperThan(raw, maxJSONDepth) {
+		return nil, errors.New("JSON is nested too deeply")
+	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	// Keep numbers as written. Converting to float64 here would make Go fail
 	// on a literal such as 1e400 that other JSON parsers accept.
@@ -183,6 +193,35 @@ func decodeObject(segment string) (map[string]any, error) {
 		return nil, errors.New("not a JSON object")
 	}
 	return obj, nil
+}
+
+// nestsDeeperThan reports whether JSON text opens more than limit levels of
+// arrays and objects. It tracks string literals so that brackets inside them
+// do not count. It only has to be right for valid JSON: anything else is
+// rejected by the parser whatever this returns.
+func nestsDeeperThan(text []byte, limit int) bool {
+	depth, inString, escaped := 0, false, false
+	for _, c := range text {
+		switch {
+		case escaped:
+			escaped = false
+		case inString:
+			if c == '\\' {
+				escaped = true
+			} else if c == '"' {
+				inString = false
+			}
+		case c == '"':
+			inString = true
+		case c == '{' || c == '[':
+			if depth++; depth > limit {
+				return true
+			}
+		case c == '}' || c == ']':
+			depth--
+		}
+	}
+	return false
 }
 
 // checkHeader applies the header policy and returns the algorithm and key ID.

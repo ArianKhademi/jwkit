@@ -193,6 +193,16 @@ func TestVerify(t *testing.T) {
 		{name: "payload is not UTF-8", token: rsaKey1.signRaw(`{"alg":"RS256","kid":"rsa-1"}`, "{\"iss\":\"\xff\"}"), want: ErrMalformed},
 		{name: "payload starts with a byte order mark", token: rsaKey1.signRaw(`{"alg":"RS256","kid":"rsa-1"}`, "\xef\xbb\xbf"+mustJSON(validClaims())), want: ErrMalformed},
 
+		// Nesting depth. The payload object is level 1, so 63 arrays inside a
+		// claim reach the limit of 64 and one more exceeds it.
+		{name: "nesting at the depth limit", token: rsaKey1.signRaw(`{"alg":"RS256","kid":"rsa-1"}`, nestedClaims(63))},
+		{name: "nesting over the depth limit", token: rsaKey1.signRaw(`{"alg":"RS256","kid":"rsa-1"}`, nestedClaims(64)), want: ErrMalformed},
+		{name: "header nesting over the depth limit", token: rsaKey1.signRaw(`{"alg":"RS256","kid":"rsa-1","x":`+strings.Repeat("[", 64)+strings.Repeat("]", 64)+`}`, mustJSON(validClaims())), want: ErrMalformed},
+		{name: "brackets inside strings are not nesting", token: rsaKey1.token(setClaim("note", strings.Repeat("[{", 100)+`\"`+strings.Repeat("[", 100)))},
+		// Beyond what encoding/json itself would parse, and within what V8
+		// would: only reachable with a raised size limit.
+		{name: "nesting beyond every parser's limit", token: rsaKey1.signRaw(`{"alg":"RS256","kid":"rsa-1"}`, nestedClaims(12000)), want: ErrMalformed, edit: func(c *Config) { c.MaxTokenBytes = 1 << 16 }},
+
 		// Size limit.
 		{name: "oversized token", token: rsaKey1.token(setClaim("pad", strings.Repeat("a", 9000))), want: ErrMalformed},
 		{name: "oversized token allowed by a higher limit", token: rsaKey1.token(setClaim("pad", strings.Repeat("a", 9000))), edit: func(c *Config) { c.MaxTokenBytes = 20000 }},
@@ -211,6 +221,12 @@ func TestVerify(t *testing.T) {
 			wantResult(t, err, tc.want)
 		})
 	}
+}
+
+// nestedClaims returns valid claims plus a claim holding n nested arrays.
+func nestedClaims(n int) string {
+	claims := mustJSON(validClaims())
+	return claims[:len(claims)-1] + `,"deep":` + strings.Repeat("[", n) + strings.Repeat("]", n) + "}"
 }
 
 // flipBit returns the base64url segment with one bit of its decoded bytes flipped.
