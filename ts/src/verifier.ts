@@ -23,6 +23,15 @@ export const DEFAULT_MAX_TOKEN_BYTES = 8192
 /** The size of an ES256 signature: r and s, 32 bytes each. */
 const ES256_SIGNATURE_LEN = 64
 
+/**
+ * How deeply a header or payload may nest arrays and objects. Real claims
+ * nest a handful of levels. The limit exists because JSON parsers disagree
+ * about depth: Go's encoding/json gives up beyond 10,000 levels while V8 has
+ * no limit at all, so without a rule of our own a deeply nested token would
+ * be malformed in one implementation and not in the other.
+ */
+const MAX_JSON_DEPTH = 64
+
 /** Configures a Verifier. issuer and audience are required. */
 export interface VerifierConfig {
   /** The exact value the token's iss claim must have. */
@@ -305,6 +314,9 @@ function decodeObject(segment: string, what: string): Record<string, unknown> {
   } catch {
     throw new ErrMalformed(`${what}: not valid UTF-8`)
   }
+  if (nestsDeeperThan(text, MAX_JSON_DEPTH)) {
+    throw new ErrMalformed(`${what}: JSON is nested too deeply`)
+  }
   let value: unknown
   try {
     value = JSON.parse(text)
@@ -315,6 +327,39 @@ function decodeObject(segment: string, what: string): Record<string, unknown> {
     throw new ErrMalformed(`${what}: not a JSON object`)
   }
   return value as Record<string, unknown>
+}
+
+/**
+ * Reports whether JSON text opens more than limit levels of arrays and
+ * objects. It tracks string literals so that brackets inside them do not
+ * count. It only has to be right for valid JSON: anything else is rejected by
+ * the parser whatever this returns.
+ */
+function nestsDeeperThan(text: string, limit: number): boolean {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (escaped) {
+      escaped = false
+    } else if (inString) {
+      if (c === '\\') {
+        escaped = true
+      } else if (c === '"') {
+        inString = false
+      }
+    } else if (c === '"') {
+      inString = true
+    } else if (c === '{' || c === '[') {
+      if (++depth > limit) {
+        return true
+      }
+    } else if (c === '}' || c === ']') {
+      depth--
+    }
+  }
+  return false
 }
 
 /**

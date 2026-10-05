@@ -53,6 +53,11 @@ import {
 const HEADER = '{"alg":"RS256","kid":"rsa-1"}'
 const claimsJson = (): string => JSON.stringify(validClaims())
 
+/** Valid claims plus a claim holding n nested arrays. */
+function nestedClaims(n: number): string {
+  return `${claimsJson().slice(0, -1)},"deep":${'['.repeat(n)}${']'.repeat(n)}}`
+}
+
 /** The segment with one bit of its decoded bytes flipped. */
 function flipBit(segment: string): string {
   const raw = Buffer.from(segment, 'base64url')
@@ -223,6 +228,16 @@ describe('verify', async () => {
     { name: 'payload has a stray closing brace', token: signRaw(rsaKey1, HEADER, `${claimsJson()}}`), want: 'ErrMalformed' },
     { name: 'payload is not UTF-8', token: signRaw(rsaKey1, HEADER, Buffer.from([0x7b, 0x22, 0x69, 0x73, 0x73, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d])), want: 'ErrMalformed' },
     { name: 'payload starts with a byte order mark', token: signRaw(rsaKey1, HEADER, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(claimsJson())])), want: 'ErrMalformed' },
+
+    // Nesting depth. The payload object is level 1, so 63 arrays inside a
+    // claim reach the limit of 64 and one more exceeds it.
+    { name: 'nesting at the depth limit', token: signRaw(rsaKey1, HEADER, nestedClaims(63)) },
+    { name: 'nesting over the depth limit', token: signRaw(rsaKey1, HEADER, nestedClaims(64)), want: 'ErrMalformed' },
+    { name: 'header nesting over the depth limit', token: signRaw(rsaKey1, `{"alg":"RS256","kid":"rsa-1","x":${'['.repeat(64)}${']'.repeat(64)}}`, claimsJson()), want: 'ErrMalformed' },
+    { name: 'brackets inside strings are not nesting', token: token(rsaKey1, setClaim('note', `${'[{'.repeat(100)}\\"${'['.repeat(100)}`)) },
+    // Beyond what Go's encoding/json would parse, and within what V8 would:
+    // only reachable with a raised size limit.
+    { name: "nesting beyond every parser's limit", token: signRaw(rsaKey1, HEADER, nestedClaims(12000)), want: 'ErrMalformed', config: { maxTokenBytes: 1 << 16 } },
 
     // Size limit.
     { name: 'oversized token', token: token(rsaKey1, setClaim('pad', 'a'.repeat(9000))), want: 'ErrMalformed' },
