@@ -184,7 +184,11 @@ func (c *Claims) Strings(name string) []string {
 }
 
 // Scopes returns the token's scopes from the "scope" claim (RFC 8693) and the
-// "scp" claim (used by Okta and Microsoft Entra ID), in that order.
+// "scp" claim (used by Okta and Microsoft Entra ID), in that order. The
+// result is never nil, so it encodes to JSON as [] rather than null, like the
+// TypeScript package's scopes().
 func (c *Claims) Scopes() []string {
-	return append(c.Strings("scope"), c.Strings("scp")...)
+	scopes := []string{}
+	scopes = append(scopes, c.Strings("scope")...)
+	return append(scopes, c.Strings("scp")...)
 }

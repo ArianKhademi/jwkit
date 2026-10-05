@@ -314,6 +314,10 @@ func TestVerifyReturnsClaims(t *testing.T) {
 	if !c.IssuedAt.IsZero() || !c.NotBefore.IsZero() || c.Subject != "" {
 		t.Errorf("optional claims not zero: %+v", c)
 	}
+	// No scopes is an empty list, not nil: it must encode as [] in JSON.
+	if got := mustJSON(c.Scopes()); got != "[]" {
+		t.Errorf("Scopes() of a token without scopes encodes as %s", got)
+	}
 
 	// A NumericDate far outside what time.Time can represent is clamped.
 	c, err = v.Verify(context.Background(), rsaKey1.token(setClaim("exp", 1e300), setClaim("iat", -1e300)))
