@@ -521,6 +521,7 @@ func TestParseJWKS(t *testing.T) {
 		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = 7 }),                           // kid not a string
 		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "no-n"; delete(j, "n") }),      // incomplete
 		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "bad-n"; j["n"] = "!!!" }),     // not base64url
+		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "zero-n"; j["n"] = b64(make([]byte, 256)) }), // all-zero modulus
 		jwkWith(rsaKey3, func(j map[string]any) { j["kid"] = "no-alg-use"; delete(j, "alg"); delete(j, "use") }),
 		rsaSmall.jwk(), // 1024-bit modulus
 		ecP384.jwk(),   // wrong curve

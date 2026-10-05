@@ -94,6 +94,7 @@ func TestVerify(t *testing.T) {
 		{name: "duplicate header member: the last one wins", token: rsaKey1.signRaw(`{"alg":"none","alg":"RS256","kid":"rsa-1"}`, mustJSON(validClaims()))},
 		{name: "whitespace around the JSON is allowed", token: rsaKey1.signRaw(" {\"alg\":\"RS256\",\"kid\":\"rsa-1\"}\n", "\t"+mustJSON(validClaims())+" ")},
 		{name: "huge exp", token: rsaKey1.token(setClaim("exp", 1e300))},
+		{name: "claims named like JavaScript's Object.prototype members", token: rsaKey1.signRaw(`{"alg":"RS256","kid":"rsa-1"}`, `{"__proto__":{"iss":"x"},"constructor":"x","iss":"https://issuer.example","aud":"https://api.example","exp":1750000300}`)},
 
 		// Time-based claims.
 		{name: "expired", token: rsaKey1.token(setClaim("exp", now-3600)), want: ErrExpired},
@@ -119,6 +120,7 @@ func TestVerify(t *testing.T) {
 		{name: "missing audience", token: rsaKey1.token(setClaim("aud", nil)), want: ErrBadAudience},
 		{name: "audience array without ours", token: rsaKey1.token(setClaim("aud", []any{"a", "b"})), want: ErrBadAudience},
 		{name: "audience is a number", token: rsaKey1.token(setClaim("aud", 42)), want: ErrBadAudience},
+		{name: "claims are not read from a __proto__ member", token: rsaKey1.signRaw(`{"alg":"RS256","kid":"rsa-1"}`, `{"__proto__":{"iss":"https://issuer.example","aud":"https://api.example","exp":1750000300}}`), want: ErrBadIssuer},
 		{name: "wrong issuer wins over expiry", token: rsaKey1.token(setClaim("iss", "x"), setClaim("exp", now-3600)), want: ErrBadIssuer},
 
 		// Signature.
@@ -152,6 +154,8 @@ func TestVerify(t *testing.T) {
 		{name: "missing alg", token: rsaKey1.token(setHeader("alg", nil)), want: ErrMalformed},
 		{name: "alg is not a string", token: rsaKey1.token(setHeader("alg", 256)), want: ErrMalformed},
 		{name: "member names are case-sensitive", token: rsaKey1.signRaw(`{"ALG":"RS256","kid":"rsa-1"}`, mustJSON(validClaims())), want: ErrMalformed},
+
+		{name: "alg is not read from a __proto__ member", token: rsaKey1.signRaw(`{"__proto__":{"alg":"RS256","kid":"rsa-1"}}`, mustJSON(validClaims())), want: ErrMalformed},
 
 		// Header policy.
 		{name: "missing kid", token: rsaKey1.token(setHeader("kid", nil)), want: ErrMalformed},
