@@ -33,13 +33,16 @@ const (
 	DefaultMaxTokenBytes = 8192
 )
 
-// Config configures a Verifier. Issuer, Audience and JWKSURL are required.
+// Config configures a Verifier. Issuer and Audience are required.
 type Config struct {
 	// Issuer is the exact value the token's iss claim must have.
 	Issuer string
 	// Audience must appear in the token's aud claim.
 	Audience string
-	// JWKSURL is where the issuer publishes its public keys.
+	// JWKSURL is where the issuer publishes its public keys. If it is empty,
+	// Issuer must be a URL and the JWKS location is resolved through OpenID
+	// Connect discovery: jwks_uri from
+	// <Issuer>/.well-known/openid-configuration.
 	JWKSURL string
 
 	// ClockSkew is the tolerance applied to exp, nbf and iat. Zero means
@@ -90,8 +93,16 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 	if cfg.Audience == "" {
 		return nil, errors.New("jwkit: Config.Audience is required")
 	}
-	if err := checkHTTPURL(cfg.JWKSURL); err != nil {
-		return nil, fmt.Errorf("jwkit: Config.JWKSURL: %w", err)
+	var discoveryURL string
+	if cfg.JWKSURL != "" {
+		if err := checkHTTPURL(cfg.JWKSURL); err != nil {
+			return nil, fmt.Errorf("jwkit: Config.JWKSURL: %w", err)
+		}
+	} else {
+		if err := checkHTTPURL(cfg.Issuer); err != nil {
+			return nil, fmt.Errorf("jwkit: Config.JWKSURL is empty and Config.Issuer cannot be used for discovery: %w", err)
+		}
+		discoveryURL = strings.TrimSuffix(cfg.Issuer, "/") + "/.well-known/openid-configuration"
 	}
 
 	skew := cfg.ClockSkew
@@ -124,7 +135,9 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 		maxTokenBytes: cfg.MaxTokenBytes,
 		now:           cfg.Now,
 		keys: &keyCache{
+			issuer:          cfg.Issuer,
 			jwksURL:         cfg.JWKSURL,
+			discoveryURL:    discoveryURL,
 			client:          cfg.HTTPClient,
 			ttl:             cfg.CacheTTL,
 			refetchInterval: cfg.RefetchInterval,
@@ -135,9 +148,6 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 }
 
 func checkHTTPURL(raw string) error {
-	if raw == "" {
-		return errors.New("is required")
-	}
 	u, err := url.Parse(raw)
 	if err != nil {
 		return err

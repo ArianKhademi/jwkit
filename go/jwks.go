@@ -42,7 +42,14 @@ type verificationKey struct {
 // One mutex guards all state. The critical sections are a map lookup and a
 // few comparisons; the network fetch always happens outside the lock.
 type keyCache struct {
-	jwksURL         string
+	issuer string
+	// jwksURL is the configured JWKS location, or the one found through
+	// discovery. It is only touched by the fetch goroutine, of which there is
+	// never more than one at a time.
+	jwksURL string
+	// discoveryURL is the issuer's OpenID Connect discovery document; empty
+	// when the JWKS URL was configured directly.
+	discoveryURL    string
 	client          *http.Client
 	ttl             time.Duration
 	refetchInterval time.Duration
@@ -153,7 +160,7 @@ func (c *keyCache) startFetchLocked() *fetchCall {
 		// Warn before waking the waiters, so the hook has run by the time
 		// any Verify call that depended on this fetch returns.
 		if err != nil && c.warn != nil {
-			c.warn(fmt.Errorf("jwkit: JWKS refresh from %s failed: %w", c.jwksURL, err))
+			c.warn(fmt.Errorf("jwkit: JWKS refresh failed: %w", err))
 		}
 		close(call.done)
 	}()
@@ -166,40 +173,91 @@ func (c *keyCache) fetch() (map[string]verificationKey, time.Duration, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.jwksURL, nil)
+	if c.jwksURL == "" {
+		discovered, err := c.discover(ctx)
+		if err != nil {
+			return nil, 0, fmt.Errorf("OpenID discovery at %s: %w", c.discoveryURL, err)
+		}
+		c.jwksURL = discovered
+	}
+
+	body, header, err := c.httpGet(ctx, c.jwksURL)
+	if err == nil {
+		var keys map[string]verificationKey
+		if keys, err = parseJWKS(body); err == nil {
+			ttl := c.ttl
+			if maxAge, ok := cacheControlMaxAge(header.Get("Cache-Control")); ok {
+				// The issuer knows its own rotation schedule better than a
+				// default does, within limits: never poll faster than
+				// refetchInterval and never trust a key set for more than
+				// maxCacheTTL.
+				ttl = min(max(maxAge, c.refetchInterval), maxCacheTTL)
+			}
+			return keys, ttl, nil
+		}
+	}
+
+	err = fmt.Errorf("JWKS at %s: %w", c.jwksURL, err)
+	if c.discoveryURL != "" {
+		// Forget a discovered location that did not work, so the next
+		// attempt asks the issuer again in case the JWKS has moved.
+		c.jwksURL = ""
+	}
+	return nil, 0, err
+}
+
+// discover resolves the JWKS URL from the issuer's OpenID Connect discovery
+// document.
+func (c *keyCache) discover(ctx context.Context) (string, error) {
+	body, _, err := c.httpGet(ctx, c.discoveryURL)
 	if err != nil {
-		return nil, 0, err
+		return "", err
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return "", errors.New("document is not a JSON object")
+	}
+	// OpenID Connect Discovery 1.0, section 4.3: the issuer in the document
+	// must be identical to the one it was requested for. Without this check
+	// a document served from the right place but describing another issuer
+	// could point us at that issuer's keys.
+	if iss, _ := doc["issuer"].(string); iss != c.issuer {
+		return "", fmt.Errorf("document is for issuer %q, not %q", doc["issuer"], c.issuer)
+	}
+	jwksURI, _ := doc["jwks_uri"].(string)
+	if jwksURI == "" {
+		return "", errors.New("document has no jwks_uri")
+	}
+	if err := checkHTTPURL(jwksURI); err != nil {
+		return "", fmt.Errorf("jwks_uri: %w", err)
+	}
+	return jwksURI, nil
+}
+
+// httpGet fetches a JSON document, insisting on a 200 and capping its size.
+func (c *keyCache) httpGet(ctx context.Context, url string) ([]byte, http.Header, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, nil, err
 	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, 0, fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
+		return nil, nil, fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
 	}
 	// Read one byte past the cap to tell "exactly at the cap" from "over it".
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxJWKSBytes+1))
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	if len(body) > maxJWKSBytes {
-		return nil, 0, fmt.Errorf("response is larger than %d bytes", maxJWKSBytes)
+		return nil, nil, fmt.Errorf("response is larger than %d bytes", maxJWKSBytes)
 	}
-	keys, err := parseJWKS(body)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	ttl := c.ttl
-	if maxAge, ok := cacheControlMaxAge(resp.Header.Get("Cache-Control")); ok {
-		// The issuer knows its own rotation schedule better than a default
-		// does, within limits: never poll faster than refetchInterval and
-		// never trust a key set for more than maxCacheTTL.
-		ttl = min(max(maxAge, c.refetchInterval), maxCacheTTL)
-	}
-	return keys, ttl, nil
+	return body, resp.Header, nil
 }
 
 // cacheControlMaxAge extracts max-age from a Cache-Control header value.

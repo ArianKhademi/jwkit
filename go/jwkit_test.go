@@ -8,12 +8,12 @@ func TestNewVerifierValidatesConfig(t *testing.T) {
 		t.Fatalf("valid config rejected: %v", err)
 	}
 	bad := map[string]func(*Config){
-		"missing issuer":      func(c *Config) { c.Issuer = "" },
-		"missing audience":    func(c *Config) { c.Audience = "" },
-		"missing JWKS URL":    func(c *Config) { c.JWKSURL = "" },
-		"relative JWKS URL":   func(c *Config) { c.JWKSURL = "/jwks.json" },
-		"non-HTTP JWKS URL":   func(c *Config) { c.JWKSURL = "file:///etc/jwks.json" },
-		"unparsable JWKS URL": func(c *Config) { c.JWKSURL = "http://[::1" },
+		"missing issuer":   func(c *Config) { c.Issuer = "" },
+		"missing audience": func(c *Config) { c.Audience = "" },
+		"no JWKS URL and an issuer that is not a URL": func(c *Config) { c.JWKSURL = ""; c.Issuer = "my-issuer" },
+		"relative JWKS URL":                           func(c *Config) { c.JWKSURL = "/jwks.json" },
+		"non-HTTP JWKS URL":                           func(c *Config) { c.JWKSURL = "file:///etc/jwks.json" },
+		"unparsable JWKS URL":                         func(c *Config) { c.JWKSURL = "http://[::1" },
 	}
 	for name, edit := range bad {
 		t.Run(name, func(t *testing.T) {

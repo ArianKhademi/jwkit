@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -365,7 +366,7 @@ func TestRefreshFailureKeepsLastGoodKeys(t *testing.T) {
 			if warned.count() != 1 {
 				t.Fatalf("OnWarning called %d times, want 1", warned.count())
 			}
-			if !strings.Contains(warned.last(), "JWKS refresh from "+iss.url()+" failed") {
+			if !strings.Contains(warned.last(), "JWKS refresh failed: JWKS at "+iss.url()) {
 				t.Errorf("warning = %q", warned.last())
 			}
 
@@ -493,6 +494,17 @@ func TestFetchErrors(t *testing.T) {
 	c := &keyCache{jwksURL: "http://issuer.example/\x7f", client: &http.Client{}, now: time.Now}
 	if _, _, err := c.fetch(); err == nil {
 		t.Error("want an error for an unusable URL")
+	}
+
+	// A response that ends before its declared length: the body read fails.
+	truncated := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		_, _ = w.Write([]byte(`{"keys":[`))
+	}))
+	defer truncated.Close()
+	c = &keyCache{jwksURL: truncated.URL, client: &http.Client{}, now: time.Now}
+	if _, _, err := c.fetch(); err == nil {
+		t.Error("want an error for a truncated body")
 	}
 }
 
