@@ -7,6 +7,7 @@
  * - Its key cache fetches the JWKS, caches keys by kid, and refetches (rate
  *   limited) when a token arrives signed by a key it has not seen, which is
  *   how key rotation is handled without restarts.
+ * - jwkitExpress wires the verifier into an Express app.
  *
  * A Go module with the same behaviour and the same error names lives next to
  * this package; a shared conformance suite keeps the two in agreement.
@@ -40,3 +41,11 @@ export {
   type Claims,
   type VerifierConfig,
 } from './verifier.js'
+export {
+  bearerToken,
+  cookieToken,
+  headerToken,
+  jwkitExpress,
+  type MiddlewareOptions,
+  type TokenExtractor,
+} from './express.js'
