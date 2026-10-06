@@ -4,6 +4,7 @@
 [![Go coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/ArianKhademi/jwkit/badges/go-coverage.json)](#coverage)
 [![TypeScript coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/ArianKhademi/jwkit/badges/ts-coverage.json)](#coverage)
 [![Go Reference](https://pkg.go.dev/badge/github.com/ArianKhademi/jwkit/go.svg)](https://pkg.go.dev/github.com/ArianKhademi/jwkit/go)
+[![npm](https://img.shields.io/npm/v/%40ariankhademi%2Fjwkit)](https://www.npmjs.com/package/@ariankhademi/jwkit)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 jwkit is a small authentication SDK that services use to verify JWTs issued by
@@ -58,8 +59,9 @@ The import path is `jwkit "github.com/ArianKhademi/jwkit/go"`. Without Gin:
 
 ### TypeScript
 
-The package is not on npm yet. Until it is, build it from this repository:
-`cd ts && npm ci && npm run build && npm pack`, then install the tarball.
+```sh
+npm install @ariankhademi/jwkit
+```
 
 ```ts
 import express from 'express'

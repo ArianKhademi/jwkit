@@ -3,6 +3,10 @@
 JWT verification against an identity provider's JWKS endpoint, with a
 key-rotation-aware key cache and drop-in Express middleware. Node.js 20+.
 
+```sh
+npm install @ariankhademi/jwkit
+```
+
 ```ts
 import express from 'express'
 import { jwkitExpress, Verifier } from '@ariankhademi/jwkit'
